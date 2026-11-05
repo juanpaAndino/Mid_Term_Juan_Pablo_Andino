@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juan Stream</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <h1 class="logo-sidebar">Juan Stream</h1>
+        <h2>Categorías</h2>
+        <ul id="lista-categorias"></ul>
+    </nav>
+
+    <main>
+        <header>
+            <h1 id="titulo-seccion">Catálogo de Videos</h1>
+        </header>
+
+        <section id="contenedor-galeria" class="cuadricula-videos"></section>
+
+        <section id="vista-reproductor" class="zona-reproductor oculto">
+            <div class="columna-principal">
+                <article class="reproductor-box">
+                    <video id="video-player" controls></video>
+                    <h2 id="video-titulo"></h2>
+                    <p id="video-categoria" class="etiqueta-categoria"></p>
+                    <p id="video-descripcion"></p>
+                </article>
+
+                <section class="seccion-comentarios">
+                    <h3>Comentarios</h3>
+                    <form id="form-comentario">
+                        <input type="text" id="autor-comentario" placeholder="Tu nombre" required>
+                        <input type="text" id="texto-comentario" placeholder="Escribe un comentario..." required>
+                        <button type="submit">Publicar</button>
+                    </form>
+                    <div id="lista-comentarios"></div>
+                </section>
+            </div>
+
+            <aside class="aside-recomendaciones">
+                <h3>Recomendaciones</h3>
+                <div id="lista-recomendaciones"></div>
+            </aside>
+        </section>
+    </main>
+
+    <script>
+        const ruta_api = "http://127.0.0.1:8000/api/";
+        const contenedorGaleria = document.getElementById("contenedor-galeria");
+        const contenedorCategorias = document.getElementById("lista-categorias");
+        const vistaReproductor = document.getElementById("vista-reproductor");
+        const tituloSeccion = document.getElementById("titulo-seccion");
+
+        const videoPlayer = document.getElementById("video-player");
+        const videoTitulo = document.getElementById("video-titulo");
+        const videoCategoria = document.getElementById("video-categoria");
+        const videoDescripcion = document.getElementById("video-descripcion");
+
+        const listaComentarios = document.getElementById("lista-comentarios");
+        const formComentario = document.getElementById("form-comentario");
+        const inputAutor = document.getElementById("autor-comentario");
+        const inputTexto = document.getElementById("texto-comentario");
+        const listaRecomendaciones = document.getElementById("lista-recomendaciones");
+
+        let videoActualId = null;
+
+        function cargarCategorias() {
+            fetch(ruta_api + "categories")
+                .then(respuesta => respuesta.json())
+                .then(categorias => {
+                    contenedorCategorias.replaceChildren();
+
+                    const itemTodos = document.createElement("li");
+                    const linkTodos = document.createElement("a");
+                    linkTodos.textContent = "Todos los videos";
+                    linkTodos.href = "#";
+                    linkTodos.addEventListener("click", () => {
+                        tituloSeccion.textContent = "Catálogo de Videos";
+                        cargarVideos(ruta_api + "videos");
+                    });
+                    itemTodos.appendChild(linkTodos);
+                    contenedorCategorias.appendChild(itemTodos);
+
+                    categorias.forEach(categoria => {
+                        const item = document.createElement("li");
+                        const link = document.createElement("a");
+                        link.textContent = categoria;
+                        link.href = "#";
+                        link.addEventListener("click", () => {
+                            tituloSeccion.textContent = "Categoría: " + categoria;
+                            cargarVideos(ruta_api + "videos?category=" + encodeURIComponent(categoria));
+                        });
+                        item.appendChild(link);
+                        contenedorCategorias.appendChild(item);
+                    });
+                });
+        }
+
+        function cargarVideos(url) {
+            vistaReproductor.classList.add("oculto");
+            contenedorGaleria.replaceChildren();
+
+            fetch(url)
+                .then(respuesta => respuesta.json())
+                .then(videos => {
+                    videos.forEach(video => {
+                        const tarjeta = document.createElement("article");
+                        const imagen = document.createElement("img");
+                        const titulo = document.createElement("h3");
+                        const categoria = document.createElement("p");
+
+                        imagen.src = video.thumbnail_url;
+                        imagen.alt = video.title;
+                        titulo.textContent = video.title;
+                        categoria.textContent = video.category;
+
+                        tarjeta.appendChild(imagen);
+                        tarjeta.appendChild(titulo);
+                        tarjeta.appendChild(categoria);
+
+                        tarjeta.addEventListener("click", () => {
+                            abrirReproductor(video.id);
+                        });
+
+                        contenedorGaleria.appendChild(tarjeta);
+                    });
+                });
+        }
+
+        function abrirReproductor(id) {
+            fetch(ruta_api + "videos/" + id)
+                .then(respuesta => respuesta.json())
+                .then(video => {
+                    videoActualId = video.id;
+                    videoPlayer.src = video.video_url;
+                    videoTitulo.textContent = video.title;
+                    videoCategoria.textContent = video.category;
+                    videoDescripcion.textContent = video.description;
+
+                    vistaReproductor.classList.remove("oculto");
+                    vistaReproductor.scrollIntoView({ behavior: "smooth" });
+
+                    cargarComentarios(video.id);
+                    cargarRecomendaciones(video.category);
+                });
+        }
+
+        function cargarComentarios(videoId) {
+            fetch(ruta_api + "videos/" + videoId + "/comments")
+                .then(respuesta => respuesta.json())
+                .then(comentarios => {
+                    listaComentarios.replaceChildren();
+                    comentarios.forEach(comentario => {
+                        agregarComentarioDOM(comentario);
+                    });
+                });
+        }
+
+        function agregarComentarioDOM(comentario) {
+            const item = document.createElement("article");
+            const autor = document.createElement("h4");
+            const texto = document.createElement("p");
+
+            autor.textContent = comentario.author;
+            texto.textContent = comentario.content;
+
+            item.appendChild(autor);
+            item.appendChild(texto);
+            listaComentarios.appendChild(item);
+        }
+
+        formComentario.addEventListener("submit", (evento) => {
+            evento.preventDefault();
+            if (!videoActualId) return;
+
+            const nuevoComentario = {
+                author: inputAutor.value,
+                content: inputTexto.value,
+                video_id: videoActualId
+            };
+
+            fetch(ruta_api + "comments", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(nuevoComentario)
+            })
+                .then(respuesta => respuesta.json())
+                .then(comentarioCreado => {
+                    agregarComentarioDOM(comentarioCreado);
+                    inputTexto.value = "";
+                });
+        });
+
+        function cargarRecomendaciones(categoria) {
+            fetch(ruta_api + "videos/recommendations/" + encodeURIComponent(categoria))
+                .then(respuesta => respuesta.json())
+                .then(videos => {
+                    listaRecomendaciones.replaceChildren();
+                    videos.forEach(video => {
+                        const item = document.createElement("article");
+                        const miniatura = document.createElement("img");
+                        const info = document.createElement("div");
+                        const titulo = document.createElement("h4");
+                        const cat = document.createElement("p");
+
+                        miniatura.src = video.thumbnail_url;
+                        miniatura.alt = video.title;
+                        titulo.textContent = video.title;
+                        cat.textContent = video.category;
+
+                        info.appendChild(titulo);
+                        info.appendChild(cat);
+                        item.appendChild(miniatura);
+                        item.appendChild(info);
+
+                        item.addEventListener("click", () => {
+                            abrirReproductor(video.id);
+                        });
+
+                        listaRecomendaciones.appendChild(item);
+                    });
+                });
+        }
+
+        cargarCategorias();
+        cargarVideos(ruta_api + "videos");
+    </script>
+</body>
+</html>
